@@ -2,9 +2,9 @@ storageClassName: app
 nodes:
 - host: node0
   pvs:
-    - name: "0"
-      path: /data/0
-      capacity: 10Gi
-    - name: "1"
-      path: /data/1
-      capacity: 20Gi
+  - name: "0"
+    path: /data/0
+    capacity: 10Gi
+  - name: "1"
+    path: /data/1
+    capacity: 20Gi
