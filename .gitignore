@@ -1,0 +1,4 @@
+/target
+/Cargo.lock
+/.idea
+/kube-sc.iml
