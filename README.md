@@ -81,29 +81,6 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: app
   volumeMode: Filesystem
----                                                                                                                                                                                   
-apiVersion: v1                                                                                                                                                                        
-kind: PersistentVolume                                                                                                                                                                
-metadata:                                                                                                                                                                             
-  name: app-0                                                                                                                                                                         
-spec:                                                                                                                                                                                 
-  accessModes:                                                                                                                                                                        
-    - ReadWriteOnce                                                                                                                                                                   
-  capacity:
-    storage: 10Gi
-  local:
-    path: /data/0
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - node0
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: app
-  volumeMode: Filesystem
 ---
 apiVersion: v1
 kind: PersistentVolume
