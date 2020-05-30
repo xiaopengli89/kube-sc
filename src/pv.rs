@@ -1,11 +1,17 @@
 use super::config::Config;
 use anyhow::Result;
 use k8s_openapi::api::core::v1::PersistentVolume;
+use std::collections::HashSet;
 
 pub fn pv_yamls(cfg: &Config) -> Result<Vec<String>> {
 	let mut out_puts = vec![];
+	let mut hs = HashSet::new();
 	for node in cfg.nodes.iter() {
 		for pv_info in node.pvs.iter() {
+			if hs.contains(&pv_info.name) {
+				return Err(anyhow::anyhow!("Duplicated pv name: {}", pv_info.name));
+			}
+			hs.insert(pv_info.name.clone());
 			let pv: PersistentVolume = serde_yaml::from_str(format!(
 				r#"apiVersion: v1
 kind: PersistentVolume
