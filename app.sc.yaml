@@ -1,10 +1,8 @@
 storageClassName: app
 nodes:
-- host: node0
-  pvs:
-  - name: "0"
-    path: /data/0
-    capacity: 10Gi
-  - name: "1"
-    path: /data/1
-    capacity: 20Gi
+  - host: k3d-k3s-default-server
+    rootPath: /data0
+  - selector: node.kubernetes.io/instance-type=k3s
+    rootPath: /data1
+minCount: 3
+capacity: 20Gi
