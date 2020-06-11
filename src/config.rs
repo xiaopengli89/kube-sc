@@ -6,7 +6,7 @@ use std::collections::HashMap;
 pub struct Config {
 	pub storage_class_name: String,
 	pub nodes: Vec<Node>,
-    pub min_count: u16,
+    pub count: usize,
 	pub capacity: String,
 }
 

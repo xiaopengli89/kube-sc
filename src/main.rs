@@ -38,9 +38,7 @@ async fn run(cfg: Config) -> Result<()> {
     // pv::list_pvs(kube_client, &cfg).await
     let o_nodes = node::list(kube_client, &cfg).await?;
     for n in &o_nodes.0 {
-        println!("{}", n.host);
-        println!("{:?}", n.root_paths);
-        println!("==========")
+        println!("{:?}", n);
     }
     Ok(())
 }

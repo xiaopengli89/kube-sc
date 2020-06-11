@@ -5,10 +5,10 @@ use anyhow::Result;
 use crate::config::Config;
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub struct NodePv {
     pub host: String,
-    pub root_paths: Vec<String>,
-    pub pv_needs: u16,
+    pub root_paths: Vec<(String, usize)>,
 }
 
 pub async fn list(kube_client: Client, cfg: &Config) -> Result<(Vec<NodePv>, Client)> {
@@ -17,17 +17,16 @@ pub async fn list(kube_client: Client, cfg: &Config) -> Result<(Vec<NodePv>, Cli
 
     fn put_root_path(node_pvs: &mut Vec<NodePv>, host: &str, root_path: &str) {
         let node = if let Some(node) = node_pvs.iter_mut().find(|n| n.host == host) {
-           node
+            node
         } else {
             node_pvs.push(NodePv {
                 host: host.into(),
                 root_paths: vec![],
-                pv_needs: 0,
             });
             node_pvs.last_mut().unwrap()
         };
-        if node.root_paths.iter().find(|p| *p == root_path).is_none() {
-            node.root_paths.push(root_path.into());
+        if node.root_paths.iter().find(|p| p.0 == root_path).is_none() {
+            node.root_paths.push((root_path.into(), 0));
         }
     }
 
@@ -45,5 +44,20 @@ pub async fn list(kube_client: Client, cfg: &Config) -> Result<(Vec<NodePv>, Cli
         }
     }
 
+    dispatch_pv_counts(&mut node_pvs, cfg.count);
+
     Ok((node_pvs, nodes.into_client()))
+}
+
+pub fn dispatch_pv_counts(node_pvs: &mut Vec<NodePv>, count: usize) {
+    let root_path_count = node_pvs.iter().map(|n| &n.root_paths).flatten().count();
+    let base = count / root_path_count;
+    let mut remain = count % root_path_count;
+    for p in node_pvs.iter_mut().map(|n| &mut n.root_paths).flatten() {
+        let p: &mut (String, usize) = p;
+        p.1 = base + if remain > 0 {
+            remain -= 1;
+            1
+        } else { 0 };
+    }
 }

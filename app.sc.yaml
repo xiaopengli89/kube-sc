@@ -4,5 +4,5 @@ nodes:
     rootPath: /data0
   - selector: node.kubernetes.io/instance-type=k3s
     rootPath: /data1
-minCount: 3
+count: 3
 capacity: 20Gi
