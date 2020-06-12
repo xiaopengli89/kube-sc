@@ -1,5 +1,7 @@
 storageClassName: app
-namespace: kube-sc
+jobNamespace: kube-sc
+jobName: kube-sc-helper
+jobImage: busybox:1.31.1
 nodes:
   - host: k3d-k3s-default-server
     rootPath: /data0
