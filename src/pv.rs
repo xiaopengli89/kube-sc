@@ -125,7 +125,8 @@ impl <'a> PvManager<'a> {
 			.map(|()| self.rng.sample(Alphanumeric))
 			.take(8)
 			.collect();
-		self.cfg.storage_class_name.clone() + "-" + &chars
+		let name = self.cfg.storage_class_name.clone() + "-" + &chars;
+		name.to_lowercase()
 	}
 
 	fn get_pv(&self, name: &str, path: &str, host: &str) -> Result<PersistentVolume> {
