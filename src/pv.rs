@@ -1,11 +1,10 @@
 use super::config::Config;
 use anyhow::{Result};
-use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount, HostPathVolumeSource};
-use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount, HostPathVolumeSource, Pod};
 use std::collections::HashSet;
 use std::iter;
 use kube::Client;
-use kube::api::{Api, Meta, ListParams, PostParams};
+use kube::api::{Api, Meta, ListParams, PostParams, PatchParams};
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
 use rand::prelude::ThreadRng;
@@ -19,7 +18,7 @@ pub struct PvManager<'a> {
 	names: HashSet<String>,
 	rng: ThreadRng,
 	node_pvs: Option<Vec<NodePv>>,
-	last_job: Option<Job>,
+	last_job: Option<Pod>,
 }
 
 impl <'a> PvManager<'a> {
@@ -165,25 +164,23 @@ spec:
 
     async fn job_mkdir(&mut self, host: &str, volumes: Vec<Volume>, volume_mounts: Vec<VolumeMount>, commands: &[String]) -> Result<()> {
 		// take client
-		let jobs: Api<Job> = Api::namespaced(self.kube_cli.take().unwrap(), &self.cfg.job_namespace);
+		let jobs: Api<Pod> = Api::namespaced(self.kube_cli.take().unwrap(), &self.cfg.job_namespace);
 
 		// define job
-		let mut job: Job = serde_yaml::from_str(format!(
-			r#"apiVersion: batch/v1
-kind: Job
+		let mut job: Pod = serde_yaml::from_str(format!(
+			r#"apiVersion: v1
+kind: Pod
 metadata:
   name: {name}
 spec:
-  template:
-    spec:
-      nodeSelector:
-        kubernetes.io/hostname: {host}
-      containers:
-      - name: {name}
-        image: {image}
-        command: ["/bin/sh","-c"]
-        args: ["{commands}"]
-      restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: {host}
+  containers:
+  - name: {name}
+    image: {image}
+    command: ["/bin/sh","-c"]
+    args: ["{commands}"]
+  restartPolicy: Never
 "#,
 			name = self.cfg.job_name,
 			host = host,
@@ -191,7 +188,7 @@ spec:
 			commands = commands.join(" && "),
 		).as_ref())?;
 
-		let template_spec = job.spec.as_mut().unwrap().template.spec.as_mut().unwrap();
+		let template_spec = job.spec.as_mut().unwrap();
 
 		// define volumes
 		template_spec.volumes = Some(volumes);
@@ -200,32 +197,21 @@ spec:
         template_spec.containers[0].volume_mounts = Some(volume_mounts);
 
         // run job
-		let mut o_job = if let Some(job_0) = self.last_job.as_ref() {
-            job.metadata.as_mut().unwrap().resource_version = Meta::resource_ver(job_0);
-
-			jobs.replace(&self.cfg.job_name, &PostParams::default(), &job).await?
-		} else {
-			if let Ok(job_0) = jobs.get(&self.cfg.job_name).await {
-				job.metadata.as_mut().unwrap().resource_version = Meta::resource_ver(&job_0);
-
-				jobs.replace(&self.cfg.job_name, &PostParams::default(), &job).await?
-			} else {
-				jobs.create(&PostParams::default(), &job).await?
-			}
-		};
+		let ss_apply = PatchParams::default_apply().force();
+		let mut o_job = jobs.patch(&self.cfg.job_name, &ss_apply, serde_yaml::to_vec(&job)?).await?;
 
 		// wait for job complete
 		let mut completed = false;
 		for _ in 0..8 {
-			o_job = jobs.get_status(&self.cfg.job_name).await?;
-			if o_job.status.as_ref().unwrap().completion_time.is_some() {
+			o_job = jobs.get(&self.cfg.job_name).await?;
+            let status = o_job.status.as_ref().unwrap().phase.as_ref().unwrap();
+
+			if status == "Succeeded" {
 				completed = true;
 				break
 			}
-			if let Some(failed) = o_job.status.as_ref().unwrap().failed {
-				if failed > 0 {
-					return Err(anyhow::anyhow!("job failed"));
-				}
+			if status != "Pending" && status != "Running" {
+				return Err(anyhow::anyhow!("job failed"));
 			}
 			Timer::after(Duration::from_secs(1)).await;
 		}
