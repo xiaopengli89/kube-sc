@@ -1,5 +1,5 @@
 use super::config::Config;
-use anyhow::Result;
+use anyhow::{Result};
 use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount, HostPathVolumeSource};
 use k8s_openapi::api::batch::v1::Job;
 use std::collections::HashSet;
@@ -9,6 +9,8 @@ use kube::api::{Api, Meta, ListParams, PostParams};
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
 use rand::prelude::ThreadRng;
+use smol::Timer;
+use std::time::Duration;
 use crate::node::NodePv;
 
 pub struct PvManager<'a> {
@@ -198,7 +200,7 @@ spec:
         template_spec.containers[0].volume_mounts = Some(volume_mounts);
 
         // run job
-		let o_job = if let Some(job_0) = self.last_job.as_ref() {
+		let mut o_job = if let Some(job_0) = self.last_job.as_ref() {
             job.metadata.as_mut().unwrap().resource_version = Meta::resource_ver(job_0);
 
 			jobs.replace(&self.cfg.job_name, &PostParams::default(), &job).await?
@@ -212,11 +214,26 @@ spec:
 			}
 		};
 
-		// wait job
-     	// TODO
+		// wait for job complete
+		let mut completed = false;
+		for _ in 0..8 {
+			o_job = jobs.get_status(&self.cfg.job_name).await?;
+			if o_job.status.unwrap().completion_time.is_some() {
+				completed = true;
+				break
+			}
+			if let Some(failed) = o_job.status.unwrap().failed {
+				if failed > 0 {
+					return Err(anyhow::anyhow!("job failed"));
+				}
+			}
+			Timer::after(Duration::from_secs(1)).await;
+		}
+		if !completed {
+			return Err(anyhow::anyhow!("job timeout"));
+		}
 
 		self.last_job = Some(o_job);
-
 
 		// put back client
 		self.kube_cli = Some(jobs.into_client());
