@@ -1,6 +1,6 @@
 use super::config::Config;
 use anyhow::Result;
-use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount};
+use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount, HostPathVolumeSource};
 use k8s_openapi::api::batch::v1::Job;
 use std::collections::HashSet;
 use std::iter;
@@ -16,7 +16,7 @@ pub struct PvManager<'a> {
 	cfg: &'a Config,
 	names: HashSet<String>,
 	rng: ThreadRng,
-	node_pvs: Vec<NodePv>,
+	node_pvs: Option<Vec<NodePv>>,
 	last_job: Option<Job>,
 }
 
@@ -27,7 +27,7 @@ impl <'a> PvManager<'a> {
 			cfg,
 			names: HashSet::new(),
 			rng: thread_rng(),
-            node_pvs,
+            node_pvs: Some(node_pvs),
 			last_job: None,
 		}
 	}
@@ -35,7 +35,7 @@ impl <'a> PvManager<'a> {
 	pub async fn current_pvs(&mut self) -> Result<()> {
 		let lp = ListParams::default();
 		// take client
-		let pvs = Api::all(self.kube_cli.take().unwrap());
+		let pvs: Api<PersistentVolume> = Api::all(self.kube_cli.take().unwrap());
 		let pv_list = pvs.list(&lp).await?;
 		// put back client
         self.kube_cli = Some(pvs.into_client());
@@ -45,15 +45,63 @@ impl <'a> PvManager<'a> {
 	}
 
 	pub async fn create_pvs(&mut self) -> Result<()> {
-		for n in self.node_pvs {
-			for p in n.root_paths {
-				self.create_n_pv(&n.host, &p.0, p.1)?;
+		let node_pvs = self.node_pvs.take().unwrap();
+		for n in &node_pvs {
+			let mut volumes = vec![];
+			let mut volume_mounts = vec![];
+			let mut commands = vec![];
+			let mut pv_paths = vec![];
+
+			for (i, p) in n.root_paths.iter().enumerate() {
+				let volume_name = format!("data-{}", i);
+				let mount_path = format!("/data/{}", i);
+
+				// add volume
+				volumes.push(Volume {
+					name: volume_name.clone(),
+					host_path: Some(HostPathVolumeSource {
+						path: p.0.clone(),
+						..Default::default()
+					}),
+					..Default::default()
+				});
+
+				// add mount
+				volume_mounts.push(VolumeMount {
+					name: volume_name,
+					mount_path: mount_path.clone(),
+					..Default::default()
+				});
+
+				let pv_names = self.prepare_n_pv(p.1)?;
+
+				for name in pv_names {
+					commands.push(format!("mkdir -m 0777 -p {}/{}", mount_path, name));
+					pv_paths.push(PvPath {
+						path: p.0.clone() + "/" + &name,
+						name,
+					});
+				}
 			}
+
+			// mkdir
+			self.job_mkdir(&n.host, volumes, volume_mounts, commands.as_ref()).await?;
+
+			// take client
+			let pvs: Api<PersistentVolume> = Api::all(self.kube_cli.take().unwrap());
+			// create pv
+			for p in pv_paths {
+				let pv = self.get_pv(&p.name, &p.path, &n.host)?;
+				let _ = pvs.create(&PostParams::default(), &pv).await?;
+			}
+			// put back client
+			self.kube_cli = Some(pvs.into_client());
 		}
+		self.node_pvs = Some(node_pvs);
 		Ok(())
 	}
 
-	async fn create_n_pv(&mut self, host: &str, path: &str, count: usize) -> Result<()> {
+	fn prepare_n_pv(&mut self, count: usize) -> Result<Vec<String>> {
         let mut pv_names = vec![];
 
 		for _ in 0..count {
@@ -64,30 +112,19 @@ impl <'a> PvManager<'a> {
 				}
 				self.names.insert(name.clone());
 				pv_names.push(name);
-
-				// let pv = self.get_pv(&name, path, host)?;
-				// self.pvs.create(&PostParams::default(), &pv).await?;
 				break;
 			}
 		}
 
-		// create job to node for mkdir
-		// TODO
-
-		Ok(())
+		Ok(pv_names)
 	}
 
 	fn rand_name(&mut self) -> String {
 		let chars: String = iter::repeat(())
 			.map(|()| self.rng.sample(Alphanumeric))
-			.take(10)
+			.take(8)
 			.collect();
 		self.cfg.storage_class_name.clone() + "-" + &chars
-	}
-
-    // TODO
-	fn rand_path(&self) -> (String, String) {
-		("".into(), "".into())
 	}
 
 	fn get_pv(&self, name: &str, path: &str, host: &str) -> Result<PersistentVolume> {
@@ -124,7 +161,7 @@ spec:
         Ok(pv)
 	}
 
-    async fn job_mkdir(&mut self, host: &str, volumes: Vec<Volume>, volume_mounts: Vec<VolumeMount>, commands: &[str]) -> Result<()> {
+    async fn job_mkdir(&mut self, host: &str, volumes: Vec<Volume>, volume_mounts: Vec<VolumeMount>, commands: &[String]) -> Result<()> {
 		// take client
 		let jobs: Api<Job> = Api::namespaced(self.kube_cli.take().unwrap(), &self.cfg.job_namespace);
 
@@ -174,7 +211,12 @@ spec:
 				jobs.create(&PostParams::default(), &job).await?
 			}
 		};
+
+		// wait job
+     	// TODO
+
 		self.last_job = Some(o_job);
+
 
 		// put back client
 		self.kube_cli = Some(jobs.into_client());
@@ -184,3 +226,7 @@ spec:
 
 }
 
+struct PvPath {
+	name: String,
+	path: String,
+}

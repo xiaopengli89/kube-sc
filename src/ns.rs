@@ -12,11 +12,11 @@ pub async fn apply(kube_client: Client, cfg: &Config) -> Result<Client> {
 apiVersion: v1
 metadata:
   name: {}
-"#, cfg.namespace,
+"#, cfg.job_namespace,
     ).into_bytes();
     let ss_apply = PatchParams::default_apply().force();
 
-    let o_patched = namespaces.patch(&cfg.namespace, &ss_apply, patch).await?;
+    let o_patched = namespaces.patch(&cfg.job_namespace, &ss_apply, patch).await?;
     println!("Namespace [{}] applied", o_patched.name());
 
     Ok(namespaces.into_client())

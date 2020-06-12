@@ -16,7 +16,7 @@ fn main() -> Result<()> {
     let matches = clap_app!("kube-sc" =>
     (version: "0.1")
     (author: "Xiaopeng Li <x.friday@outlook.com>")
-    (about: "A simple template generator for kubernetes local storage class and persistent volume")
+    (about: "A persistent volume generator for kubernetes local storage class")
     (@arg FILE: -f --file +takes_value +required "Specify a config file")
     )
     .get_matches();
@@ -40,10 +40,17 @@ async fn run(cfg: Config) -> Result<()> {
     // apply Namespace
     kube_client = ns::apply(kube_client, &cfg).await?;
 
-    // pv::list_pvs(kube_client, &cfg).await
-    let o_nodes = node::list(kube_client, &cfg).await?;
-    for n in &o_nodes.0 {
-        println!("{:?}", n);
-    }
+    // get meta of node pvs
+    let (node_pvs, kube_client) = node::list(kube_client, &cfg).await?;
+
+    // get pv manager
+    let mut pm = pv::PvManager::new(kube_client, &cfg, node_pvs);
+
+    // get current pvs
+    pm.current_pvs().await?;
+
+    // create pvs
+    pm.create_pvs().await?;
+
     Ok(())
 }

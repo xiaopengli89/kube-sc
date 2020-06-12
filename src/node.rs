@@ -48,7 +48,7 @@ pub async fn list(kube_client: Client, cfg: &Config) -> Result<(Vec<NodePv>, Cli
     Ok((node_pvs, nodes.into_client()))
 }
 
-pub fn dispatch_pv_counts(node_pvs: &mut Vec<NodePv>, count: usize) {
+fn dispatch_pv_counts(node_pvs: &mut Vec<NodePv>, count: usize) {
     let root_path_count = node_pvs.iter().map(|n| &n.root_paths).flatten().count();
     let base = count / root_path_count;
     let mut remain = count % root_path_count;
