@@ -218,11 +218,11 @@ spec:
 		let mut completed = false;
 		for _ in 0..8 {
 			o_job = jobs.get_status(&self.cfg.job_name).await?;
-			if o_job.status.unwrap().completion_time.is_some() {
+			if o_job.status.as_ref().unwrap().completion_time.is_some() {
 				completed = true;
 				break
 			}
-			if let Some(failed) = o_job.status.unwrap().failed {
+			if let Some(failed) = o_job.status.as_ref().unwrap().failed {
 				if failed > 0 {
 					return Err(anyhow::anyhow!("job failed"));
 				}
