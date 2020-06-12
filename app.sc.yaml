@@ -4,8 +4,8 @@ jobName: kube-sc-helper
 jobImage: busybox:1.31.1
 nodes:
   - host: k3d-k3s-default-server
-    rootPath: /data0
+    rootPath: /pv-data/0
   - selector: node.kubernetes.io/instance-type=k3s
-    rootPath: /data1
+    rootPath: /pv-data/1
 count: 3
 capacity: 20Gi
