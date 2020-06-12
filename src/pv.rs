@@ -94,6 +94,7 @@ impl <'a> PvManager<'a> {
 			for p in pv_paths {
 				let pv = self.get_pv(&p.name, &p.path, &n.host)?;
 				let _ = pvs.create(&PostParams::default(), &pv).await?;
+				println!("PersistentVolume [{}] created", p.name);
 			}
 			// put back client
 			self.kube_cli = Some(pvs.into_client());
