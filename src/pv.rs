@@ -4,7 +4,7 @@ use k8s_openapi::api::core::v1::{PersistentVolume, Volume, VolumeMount, HostPath
 use std::collections::HashSet;
 use std::iter;
 use kube::Client;
-use kube::api::{Api, Meta, ListParams, PostParams, PatchParams};
+use kube::api::{Api, Meta, ListParams, PostParams, DeleteParams};
 use rand::{Rng, thread_rng};
 use rand::distributions::Alphanumeric;
 use rand::prelude::ThreadRng;
@@ -198,8 +198,14 @@ spec:
         template_spec.containers[0].volume_mounts = Some(volume_mounts);
 
         // run job
-		let ss_apply = PatchParams::default_apply().force();
-		let mut o_job = jobs.patch(&self.cfg.job_name, &ss_apply, serde_yaml::to_vec(&job)?).await?;
+     	if self.last_job.is_some() {
+            jobs.delete(&self.cfg.job_name, &DeleteParams::default()).await?;
+		} else {
+			if jobs.get(&self.cfg.job_name).await.is_ok() {
+				jobs.delete(&self.cfg.job_name, &DeleteParams::default()).await?;
+			}
+		};
+		let mut o_job = jobs.create(&PostParams::default(), &job).await?;
 
 		// wait for job complete
 		let mut completed = false;
