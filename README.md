@@ -1,6 +1,6 @@
 # kube-sc
 
-A simple template generator for kubernetes local storage class and persistent volume.
+A persistent volume generator for kubernetes local storage class
 
 ## Installation
 
@@ -14,102 +14,47 @@ Describe your local storage class and persistent volume in a yaml file, such as 
 
 ```yaml
 storageClassName: app
+jobNamespace: kube-sc
+jobName: kube-sc-helper
+jobImage: busybox:1.31.1
 nodes:
-- host: node0
-  pvs:
-  - name: "0"
-    path: /data/0
-    capacity: 10Gi
-  - name: "1"
-    path: /data/1
-    capacity: 20Gi
+  - host: k3d-k3s-default-server
+    rootPath: /pv-data/0
+  - selector: node.kubernetes.io/instance-type=k3s
+    rootPath: /pv-data/1
+count: 3
+capacity: 20Gi
 ```
 
-Generate the template file and create the resources by `kubectl`:
+Create 3 pvs on nodes
 
 ```bash
-$ kube-sc -f app.sc.yaml | kubectl apply -f -
-storageclass.storage.k8s.io/app created
-persistentvolume/app-0 created
-persistentvolume/app-1 created
+$ kube-sc -f app.sc.yaml
+StorageClass [app] applied
+Namespace [kube-sc] applied
+PersistentVolume [app-n6fo32jh] created
+PersistentVolume [app-w50wkvhu] created
+PersistentVolume [app-gakmqv2f] created
 
 $ kubectl get sc,pv
-NAME                              PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
-storageclass.storage.k8s.io/app   kubernetes.io/no-provisioner   Delete          WaitForFirstConsumer   false                  24s
+NAME                                               PROVISIONER                    RECLAIMPOLICY   VOLUMEBINDINGMODE      ALLOWVOLUMEEXPANSION   AGE
+storageclass.storage.k8s.io/local-path (default)   rancher.io/local-path          Delete          WaitForFirstConsumer   false                  32h
+storageclass.storage.k8s.io/app                    kubernetes.io/no-provisioner   Delete          WaitForFirstConsumer   false                  26m
 
-NAME                     CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
-persistentvolume/app-0   10Gi       RWO            Retain           Available           app                     24s
-persistentvolume/app-1   20Gi       RWO            Retain           Available           app                     24s
-```
+NAME                            CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS      CLAIM   STORAGECLASS   REASON   AGE
+persistentvolume/app-n6fo32jh   20Gi       RWO            Retain           Available           app                     61s
+persistentvolume/app-w50wkvhu   20Gi       RWO            Retain           Available           app                     61s
+persistentvolume/app-gakmqv2f   20Gi       RWO            Retain           Available           app                     61s
 
-Or you can just print the template file:
+$ /pv-data # ls -l *
+0:
+total 8
+drwxrwxrwx 2 0 0 4096 Jun 12 15:53 app-n6fo32jh
+drwxrwxrwx 2 0 0 4096 Jun 12 15:53 app-w50wkvhu
 
-```bash
-kube-sc -f app.sc.yaml
-```
-
-The output:
-
-```
----
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: app
-provisioner: kubernetes.io/no-provisioner
-volumeBindingMode: WaitForFirstConsumer
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: app-0
-spec:
-  accessModes:
-    - ReadWriteOnce
-  capacity:
-    storage: 10Gi
-  local:
-    path: /data/0
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - node0
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: app
-  volumeMode: Filesystem
----
-apiVersion: v1
-kind: PersistentVolume
-metadata:
-  name: app-1
-spec:
-  accessModes:
-    - ReadWriteOnce
-  capacity:
-    storage: 20Gi
-  local:
-    path: /data/1
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-        - matchExpressions:
-            - key: kubernetes.io/hostname
-              operator: In
-              values:
-                - node0
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: app
-  volumeMode: Filesystem
-```
-
-Alternatively, to save the template as a file:
-
-```bash
-$ kube-sc -f app.sc.yaml > output.yaml
+1:
+total 4
+drwxrwxrwx 2 0 0 4096 Jun 12 15:53 app-gakmqv2f
 ```
 
 ## License
