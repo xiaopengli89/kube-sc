@@ -1,4 +1,5 @@
 storageClassName: app
+namespace: kube-sc
 nodes:
   - host: k3d-k3s-default-server
     rootPath: /data0

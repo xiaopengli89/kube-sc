@@ -1,12 +1,14 @@
+#![allow(dead_code)]
+
 mod config;
 mod node;
 mod pv;
 mod storage_class;
+mod ns;
 
 use anyhow::Result;
 use clap::clap_app;
 use config::Config;
-use kube::api::Api;
 use kube::Client;
 use std::fs::File;
 
@@ -30,10 +32,13 @@ fn main() -> Result<()> {
 }
 
 async fn run(cfg: Config) -> Result<()> {
-    let kube_client = Client::try_default().await?;
+    let mut kube_client = Client::try_default().await?;
 
-    // create StorageClass
-    // let kube_client = storage_class::create(kube_client, &cfg).await?;
+    // apply StorageClass
+    kube_client = storage_class::apply(kube_client, &cfg).await?;
+
+    // apply Namespace
+    kube_client = ns::apply(kube_client, &cfg).await?;
 
     // pv::list_pvs(kube_client, &cfg).await
     let o_nodes = node::list(kube_client, &cfg).await?;

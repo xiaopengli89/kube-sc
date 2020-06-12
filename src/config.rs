@@ -1,10 +1,10 @@
 use serde::Deserialize;
-use std::collections::HashMap;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
 	pub storage_class_name: String,
+	pub namespace: String,
 	pub nodes: Vec<Node>,
     pub count: usize,
 	pub capacity: String,

@@ -3,7 +3,6 @@ use k8s_openapi::api::core::v1::Node;
 use kube::api::{ListParams, Meta};
 use anyhow::Result;
 use crate::config::Config;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct NodePv {

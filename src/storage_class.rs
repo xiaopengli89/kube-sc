@@ -2,7 +2,7 @@ use super::config::Config;
 use anyhow::Result;
 use k8s_openapi::api::storage::v1::StorageClass;
 use kube::Client;
-use kube::api::{Api, PatchParams, PatchStrategy, Meta, ListParams};
+use kube::api::{Api, PatchParams, Meta};
 
 pub async fn apply(kube_client: Client, cfg: &Config) -> Result<Client> {
     let storage_classes: Api<StorageClass> = Api::all(kube_client);
